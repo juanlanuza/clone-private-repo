@@ -12,6 +12,7 @@
 #     chmod +x clone_private_repo.sh && ./clone_private_repo.sh
 # 3️⃣ Si no existe `.env` o está incompleto, el script te guiará.
 #    Si ya existe y es válido, usará los valores de ahí.
+# 4️⃣ Si se clona y existe /scripts/*.sh, te dará opción de ejecutarlos.
 
 set -e
 
@@ -144,8 +145,77 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────
+# 🏃 Ejecutar scripts de post-instalación
+# ──────────────────────────────────────────────────────────────
+REPO_DIR=$REPO_NAME
+SCRIPTS_DIR="$REPO_DIR/scripts"
+
+# Comprobar si el directorio de scripts existe
+if [[ -d "$SCRIPTS_DIR" ]]; then
+    
+    # Encontrar archivos .sh
+    # 'shopt -s nullglob' hace que el array esté vacío si no hay coincidencias
+    shopt -s nullglob
+    sh_files=("$SCRIPTS_DIR"/*.sh)
+    shopt -u nullglob # Desactivar nullglob
+    
+    # Comprobar si se encontraron archivos .sh
+    if [[ ${#sh_files[@]} -gt 0 ]]; then
+        echo ""
+        echo "🚀 Se encontraron scripts de post-instalación en $SCRIPTS_DIR."
+        echo "Selecciona un script para ejecutar (puedes ejecutar varios):"
+        
+        # Construir el array de opciones (solo nombres de archivo)
+        options=()
+        for f in "${sh_files[@]}"; do
+            options+=("$(basename "$f")")
+        done
+        options+=("Salir (No ejecutar nada más)")
+
+        # Configurar el prompt del menú 'select'
+        PS3="Tu elección (o '${#options[@]}' para salir): "
+        
+        select opt in "${options[@]}"; do
+            if [[ "$opt" == "Salir (No ejecutar nada más)" ]]; then
+                echo "Saliendo del menú de scripts."
+                break # Romper el bucle 'select'
+            
+            elif [[ -n "$opt" ]]; then
+                # Opción válida seleccionada
+                local_script_path="$SCRIPTS_DIR/$opt"
+                
+                echo ""
+                echo "--- ⏳ Ejecutando $opt ---"
+                if [[ -f "$local_script_path" ]]; then
+                    chmod +x "$local_script_path"
+                    # Ejecutarlo desde su propio directorio (para rutas relativas)
+                    (cd "$SCRIPTS_DIR" && "./$opt")
+                    echo "--- ✅ Ejecución de $opt finalizada ---"
+                else
+                    echo "--- ❌ Error: El script $opt no se encuentra. ---"
+                fi
+                echo ""
+                echo "--- Menú (puedes elegir otro o salir) ---"
+            
+            else
+                # Se introdujo un número inválido
+                echo "Opción no válida. Introduce un número del 1 al ${#options[@]}."
+            fi
+        done
+        
+        # Limpiar PS3 para futuras interacciones
+        PS3="#? "
+        
+    else
+        echo "ℹ️ Se encontró la carpeta $SCRIPTS_DIR, pero no contiene archivos .sh."
+    fi
+else
+    echo "ℹ️ No se encontró la carpeta $SCRIPTS_DIR. Omitiendo scripts de post-instalación."
+fi
+
+# ──────────────────────────────────────────────────────────────
 # ✅ Final
 # ──────────────────────────────────────────────────────────────
 echo ""
-echo "✅ Repositorio clonado correctamente."
+echo "✅ Proceso completado."
 echo ""
